@@ -9,15 +9,17 @@
 #######################################
 system_create_user() {
   print_banner
-  printf "${WHITE} 💻 Agora, vamos criar o usuário para a instancia...${GRAY_LIGHT}"
-  printf "\n\n"
-
+  printf "${WHITE} 💻 Agora, vamos criar o usuário para a instância...${GRAY_LIGHT}\n\n"
   sleep 2
 
-  usermod -aG sudo deploy <<EOF
-  useradd -m -p $(openssl passwd -crypt ${deploy_password}) -s /bin/bash -G sudo deploy
-  usermod -aG sudo deploy
-EOF
+  if id "deploy" &>/dev/null; then
+    echo "✅ Usuário 'deploy' já existe. Pulando criação."
+  else
+    sudo useradd -m -s /bin/bash -G sudo deploy
+    echo "deploy:${deploy_password}" | sudo chpasswd
+    sudo usermod -aG docker deploy
+    echo "✅ Usuário 'deploy' criado com sucesso!"
+  fi
 
   sleep 2
 }
