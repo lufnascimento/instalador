@@ -1,165 +1,242 @@
 #!/bin/bash
-# Script de automação para instalação e gerenciamento do Whaticket
+# 
+# system management
 
 #######################################
-# Função utilitária para exibir banner
-#######################################
-print_banner() {
-  clear
-  echo "=============================="
-  echo "      INSTALADOR WHATICKET    "
-  echo "=============================="
-}
-
-#######################################
-# Cria usuário 'deploy'
+# creates user
+# Arguments:
+#   None
 #######################################
 system_create_user() {
   print_banner
-  echo "💻 Criando usuário para a instância..."
+  printf "${WHITE} 💻 Agora, vamos criar o usuário para a instancia...${GRAY_LIGHT}"
+  printf "\n\n"
+
   sleep 2
 
-  sudo useradd -m -s /bin/bash -G sudo deploy
-  echo "deploy:${deploy_password}" | sudo chpasswd
+  sudo su - root <<EOF
+  useradd -m -p $(openssl passwd -crypt ${deploy_password}) -s /bin/bash -G sudo deploy
+  usermod -aG sudo deploy
+EOF
+
+  sleep 2
 }
 
 #######################################
-# Cria pasta da instância
-#######################################
-system_create_folder() {
-  print_banner
-  echo "💻 Criando nova pasta da instância..."
-  sleep 2
-
-  sudo -u deploy mkdir -p "/home/deploy/${instancia_add}"
-}
-
-#######################################
-# Move arquivos do projeto
+# clones repostories using git
+# Arguments:
+#   None
 #######################################
 system_mv_folder() {
   print_banner
-  echo "💻 Movendo arquivos do projeto..."
+  printf "${WHITE} 💻 Fazendo download do código Whaticket...${GRAY_LIGHT}"
+  printf "\n\n"
+
+
   sleep 2
 
-  cp "${PROJECT_ROOT}/whaticket.zip" "/home/deploy/${instancia_add}/"
+  sudo su - root <<EOF
+  cp "${PROJECT_ROOT}"/whaticket.zip /home/deploy/${instancia_add}/
+EOF
+  # git clone ${link_git} /home/deploy/${instancia_add}/
+
+  sleep 2
 }
 
 #######################################
-# Descompacta o Whaticket
+# creates folder
+# Arguments:
+#   None
+#######################################
+system_create_folder() {
+  print_banner
+  printf "${WHITE} 💻 Agora, vamos criar a nova pasta...${GRAY_LIGHT}"
+  printf "\n\n"
+
+  sleep 2
+
+  sudo su - deploy <<EOF 
+  mkdir ${instancia_add}
+EOF
+
+  sleep 2
+}
+
+#######################################
+# unzip whaticket
+# Arguments:
+#   None
 #######################################
 system_unzip_whaticket() {
   print_banner
-  echo "💻 Descompactando Whaticket..."
+  printf "${WHITE} 💻 Fazendo unzip whaticket...${GRAY_LIGHT}"
+  printf "\n\n"
+
   sleep 2
 
-  sudo -u deploy unzip "/home/deploy/${instancia_add}/whaticket.zip" -d "/home/deploy/${instancia_add}"
+  sudo su - deploy <<EOF
+  unzip /home/deploy/${instancia_add}/whaticket.zip -d /home/deploy/${instancia_add}
+EOF
+
+  sleep
 }
 
 #######################################
-# Atualiza sistema e instala dependências principais
+# updates system
+# Arguments:
+#   None
 #######################################
 system_update() {
   print_banner
-  echo "💻 Atualizando sistema..."
+  printf "${WHITE} 💻 Vamos atualizar o sistema Whaticket...${GRAY_LIGHT}"
+  printf "\n\n"
+
   sleep 2
 
-  sudo apt-get update -y
-  sudo apt-get install -y curl wget unzip gnupg lsb-release build-essential
+  sudo su - root <<EOF
+  apt -y update
+  sudo apt-get install -y libxshmfence-dev libgbm-dev wget unzip fontconfig locales gconf-service libasound2 libatk1.0-0 libc6 libcairo2 libcups2 libdbus-1-3 libexpat1 libfontconfig1 libgcc1 libgconf-2-4 libgdk-pixbuf2.0-0 libglib2.0-0 libgtk-3-0 libnspr4 libpango-1.0-0 libpangocairo-1.0-0 libstdc++6 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 libxfixes3 libxi6 libxrandr2 libxrender1 libxss1 libxtst6 ca-certificates fonts-liberation libappindicator1 libnss3 lsb-release xdg-utils
+EOF
+
+  sleep 2
 }
 
+
+
 #######################################
-# Instala Node.js, PostgreSQL e ajusta timezone
+# delete system
+# Arguments:
+#   None
 #######################################
-system_node_install() {
+deletar_tudo() {
   print_banner
-  echo "💻 Instalando Node.js e PostgreSQL..."
+  printf "${WHITE} 💻 Vamos deletar o Whaticket...${GRAY_LIGHT}"
+  printf "\n\n"
+
   sleep 2
 
-  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-  sudo apt-get install -y nodejs
-  sudo npm install -g npm@latest
+  sudo su - root <<EOF
+  docker container rm redis-${empresa_delete} --force
+  cd && rm -rf /etc/nginx/sites-enabled/${empresa_delete}-frontend
+  cd && rm -rf /etc/nginx/sites-enabled/${empresa_delete}-backend  
+  cd && rm -rf /etc/nginx/sites-available/${empresa_delete}-frontend
+  cd && rm -rf /etc/nginx/sites-available/${empresa_delete}-backend
+  
+  sleep 2
 
-  echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | \
-    sudo tee /etc/apt/sources.list.d/pgdg.list
-  wget -q https://www.postgresql.org/media/keys/ACCC4CF8.asc -O- | sudo apt-key add -
-  sudo apt-get update -y && sudo apt-get install -y postgresql
+  sudo su - postgres
+  dropuser ${empresa_delete}
+  dropdb ${empresa_delete}
+  exit
+EOF
 
-  sudo timedatectl set-timezone America/Sao_Paulo
-}
+sleep 2
 
-#######################################
-# Instala Docker e Redis
-#######################################
-system_docker_install() {
+sudo su - deploy <<EOF
+ rm -rf /home/deploy/${empresa_delete}
+ pm2 delete ${empresa_delete}-frontend ${empresa_delete}-backend
+ pm2 save
+EOF
+
+  sleep 2
+
   print_banner
-  echo "💻 Instalando Docker e Redis..."
+  printf "${WHITE} 💻 Remoção da Instancia/Empresa ${empresa_delete} realizado com sucesso ...${GRAY_LIGHT}"
+  printf "\n\n"
+
+
   sleep 2
 
-  sudo apt-get install -y \
-    apt-transport-https \
-    ca-certificates \
-    curl \
-    software-properties-common
-
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-  sudo add-apt-repository \
-    "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable"
-  sudo apt-get update -y
-  sudo apt-get install -y docker-ce
 }
 
 #######################################
-# Instala o PM2
+# bloquear system
+# Arguments:
+#   None
 #######################################
-system_pm2_install() {
+configurar_bloqueio() {
   print_banner
-  echo "💻 Instalando PM2..."
+  printf "${WHITE} 💻 Vamos bloquear o Whaticket...${GRAY_LIGHT}"
+  printf "\n\n"
+
   sleep 2
 
-  sudo npm install -g pm2
-}
+sudo su - deploy <<EOF
+ pm2 stop ${empresa_bloquear}-backend
+ pm2 save
+EOF
 
-#######################################
-# Instala o Snapd e Certbot
-#######################################
-system_certbot_install() {
+  sleep 2
+
   print_banner
-  echo "💻 Instalando Certbot..."
-  sleep 2
+  printf "${WHITE} 💻 Bloqueio da Instancia/Empresa ${empresa_bloquear} realizado com sucesso ...${GRAY_LIGHT}"
+  printf "\n\n"
 
-  sudo apt install -y snapd
-  sudo snap install core && sudo snap refresh core
-  sudo snap install --classic certbot
-  sudo ln -s /snap/bin/certbot /usr/bin/certbot
+  sleep 2
 }
 
+
 #######################################
-# Instala e configura o NGINX
+# desbloquear system
+# Arguments:
+#   None
 #######################################
-system_nginx_install() {
+configurar_desbloqueio() {
   print_banner
-  echo "💻 Instalando e configurando NGINX..."
+  printf "${WHITE} 💻 Vamos Desbloquear o Whaticket...${GRAY_LIGHT}"
+  printf "\n\n"
+
   sleep 2
 
-  sudo apt install -y nginx
-  sudo rm -f /etc/nginx/sites-enabled/default
-  echo 'client_max_body_size 100M;' | sudo tee /etc/nginx/conf.d/deploy.conf
-  sudo systemctl restart nginx
+sudo su - deploy <<EOF
+ pm2 start ${empresa_bloquear}-backend
+ pm2 save
+EOF
+
+  sleep 2
+
+  print_banner
+  printf "${WHITE} 💻 Desbloqueio da Instancia/Empresa ${empresa_desbloquear} realizado com sucesso ...${GRAY_LIGHT}"
+  printf "\n\n"
+
+  sleep 2
 }
 
 #######################################
-# Configura domínios e certificados SSL
+# alter dominio system
+# Arguments:
+#   None
 #######################################
 configurar_dominio() {
   print_banner
-  echo "💻 Configurando domínios e certificados..."
-  sleep 2
+  printf "${WHITE} 💻 Vamos Alterar os Dominios do Whaticket...${GRAY_LIGHT}"
+  printf "\n\n"
 
-  backend_hostname=$(echo "${alter_backend_url/https:\/\//}")
-  frontend_hostname=$(echo "${alter_frontend_url/https:\/\//}")
+sleep 2
 
-  sudo tee /etc/nginx/sites-available/${empresa_dominio}-backend > /dev/null <<EOF
+  sudo su - root <<EOF
+  cd && rm -rf /etc/nginx/sites-enabled/${empresa_dominio}-frontend
+  cd && rm -rf /etc/nginx/sites-enabled/${empresa_dominio}-backend  
+  cd && rm -rf /etc/nginx/sites-available/${empresa_dominio}-frontend
+  cd && rm -rf /etc/nginx/sites-available/${empresa_dominio}-backend
+EOF
+
+sleep 2
+
+  sudo su - deploy <<EOF
+  cd && cd /home/deploy/${empresa_dominio}/frontend
+  sed -i "1c\REACT_APP_BACKEND_URL=https://${alter_backend_url}" .env
+  cd && cd /home/deploy/${empresa_dominio}/backend
+  sed -i "2c\BACKEND_URL=https://${alter_backend_url}" .env
+  sed -i "3c\FRONTEND_URL=https://${alter_frontend_url}" .env 
+EOF
+
+sleep 2
+   
+   backend_hostname=$(echo "${alter_backend_url/https:\/\/}")
+
+ sudo su - root <<EOF
+  cat > /etc/nginx/sites-available/${empresa_dominio}-backend << 'END'
 server {
   server_name $backend_hostname;
   location / {
@@ -174,9 +251,16 @@ server {
     proxy_cache_bypass \$http_upgrade;
   }
 }
+END
+ln -s /etc/nginx/sites-available/${empresa_dominio}-backend /etc/nginx/sites-enabled
 EOF
 
-  sudo tee /etc/nginx/sites-available/${empresa_dominio}-frontend > /dev/null <<EOF
+sleep 2
+
+frontend_hostname=$(echo "${alter_frontend_url/https:\/\/}")
+
+sudo su - root << EOF
+cat > /etc/nginx/sites-available/${empresa_dominio}-frontend << 'END'
 server {
   server_name $frontend_hostname;
   location / {
@@ -191,61 +275,307 @@ server {
     proxy_cache_bypass \$http_upgrade;
   }
 }
+END
+ln -s /etc/nginx/sites-available/${empresa_dominio}-frontend /etc/nginx/sites-enabled
 EOF
 
-  sudo ln -sf /etc/nginx/sites-available/${empresa_dominio}-backend /etc/nginx/sites-enabled/
-  sudo ln -sf /etc/nginx/sites-available/${empresa_dominio}-frontend /etc/nginx/sites-enabled/
-  sudo systemctl restart nginx
+ sleep 2
 
-  sudo certbot -m "$deploy_email" --nginx --agree-tos --non-interactive --domains "$backend_hostname","$frontend_hostname"
+ sudo su - root <<EOF
+  service nginx restart
+EOF
+
+  sleep 2
+
+  backend_domain=$(echo "${backend_url/https:\/\/}")
+  frontend_domain=$(echo "${frontend_url/https:\/\/}")
+
+  sudo su - root <<EOF
+  certbot -m $deploy_email \
+          --nginx \
+          --agree-tos \
+          --non-interactive \
+          --domains $backend_domain,$frontend_domain
+EOF
+
+  sleep 2
+
+  print_banner
+  printf "${WHITE} 💻 Alteração de dominio da Instancia/Empresa ${empresa_dominio} realizado com sucesso ...${GRAY_LIGHT}"
+  printf "\n\n"
+
+  sleep 2
 }
 
 #######################################
-# Bloqueia backend com PM2
+# installs node
+# Arguments:
+#   None
 #######################################
-configurar_bloqueio() {
+system_node_install() {
   print_banner
-  echo "💻 Bloqueando backend da instância..."
+  printf "${WHITE} 💻 Instalando node.js...${GRAY_LIGHT}"
+  printf "\n\n"
+
   sleep 2
 
-  sudo -u deploy pm2 stop ${empresa_bloquear}-backend
-  sudo -u deploy pm2 save
+  sudo su - root <<EOF
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  apt-get install -y nodejs
+  sleep 2
+  npm install -g npm@latest
+  sleep 2
+  sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+  wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+  sudo apt-get update -y && sudo apt-get -y install postgresql
+  sleep 2
+  sudo timedatectl set-timezone America/Sao_Paulo
+  
+EOF
+
+  sleep 2
+}
+#######################################
+# installs docker
+# Arguments:
+#   None
+#######################################
+system_docker_install() {
+  print_banner
+  printf "${WHITE} 💻 Instalando redis...${GRAY_LIGHT}"
+  printf "\n\n"
+
+  sleep 2
+
+  sudo su - root <<EOF
+  apt install -y apt-transport-https \
+                 ca-certificates curl \
+                 software-properties-common
+
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+  
+  add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable"
+
+  apt install -y docker-ce
+EOF
+
+  sleep 2
 }
 
 #######################################
-# Desbloqueia backend com PM2
+# Ask for file location containing
+# multiple URL for streaming.
+# Globals:
+#   WHITE
+#   GRAY_LIGHT
+#   BATCH_DIR
+#   PROJECT_ROOT
+# Arguments:
+#   None
 #######################################
-configurar_desbloqueio() {
+system_puppeteer_dependencies() {
   print_banner
-  echo "💻 Desbloqueando backend da instância..."
+  printf "${WHITE} 💻 Instalando puppeteer dependencies...${GRAY_LIGHT}"
+  printf "\n\n"
+
   sleep 2
 
-  sudo -u deploy pm2 start ${empresa_desbloquear}-backend
-  sudo -u deploy pm2 save
+  sudo su - root <<EOF
+  apt-get install -y libxshmfence-dev \
+                      libgbm-dev \
+                      wget \
+                      unzip \
+                      fontconfig \
+                      locales \
+                      gconf-service \
+                      libasound2 \
+                      libatk1.0-0 \
+                      libc6 \
+                      libcairo2 \
+                      libcups2 \
+                      libdbus-1-3 \
+                      libexpat1 \
+                      libfontconfig1 \
+                      libgcc1 \
+                      libgconf-2-4 \
+                      libgdk-pixbuf2.0-0 \
+                      libglib2.0-0 \
+                      libgtk-3-0 \
+                      libnspr4 \
+                      libpango-1.0-0 \
+                      libpangocairo-1.0-0 \
+                      libstdc++6 \
+                      libx11-6 \
+                      libx11-xcb1 \
+                      libxcb1 \
+                      libxcomposite1 \
+                      libxcursor1 \
+                      libxdamage1 \
+                      libxext6 \
+                      libxfixes3 \
+                      libxi6 \
+                      libxrandr2 \
+                      libxrender1 \
+                      libxss1 \
+                      libxtst6 \
+                      ca-certificates \
+                      fonts-liberation \
+                      libappindicator1 \
+                      libnss3 \
+                      lsb-release \
+                      xdg-utils
+EOF
+
+  sleep 2
 }
 
 #######################################
-# Deleta instância completa
+# installs pm2
+# Arguments:
+#   None
 #######################################
-deletar_tudo() {
+system_pm2_install() {
   print_banner
-  echo "💻 Deletando instância..."
+  printf "${WHITE} 💻 Instalando pm2...${GRAY_LIGHT}"
+  printf "\n\n"
+
   sleep 2
 
-  sudo docker container rm redis-${empresa_delete} --force
-  sudo rm -f /etc/nginx/sites-enabled/${empresa_delete}-frontend
-  sudo rm -f /etc/nginx/sites-enabled/${empresa_delete}-backend
-  sudo rm -f /etc/nginx/sites-available/${empresa_delete}-frontend
-  sudo rm -f /etc/nginx/sites-available/${empresa_delete}-backend
+  sudo su - root <<EOF
+  npm install -g pm2
 
-  sudo -u postgres dropdb ${empresa_delete}
-  sudo -u postgres dropuser ${empresa_delete}
+EOF
 
-  sudo -u deploy rm -rf /home/deploy/${empresa_delete}
-  sudo -u deploy pm2 delete ${empresa_delete}-frontend ${empresa_delete}-backend || true
-  sudo -u deploy pm2 save
+  sleep 2
+}
 
+#######################################
+# installs snapd
+# Arguments:
+#   None
+#######################################
+system_snapd_install() {
   print_banner
-  echo "✅ Instância ${empresa_delete} removida com sucesso."
+  printf "${WHITE} 💻 Instalando snapd...${GRAY_LIGHT}"
+  printf "\n\n"
+
+  sleep 2
+
+  sudo su - root <<EOF
+  apt install -y snapd
+  snap install core
+  snap refresh core
+EOF
+
+  sleep 2
+}
+
+#######################################
+# installs certbot
+# Arguments:
+#   None
+#######################################
+system_certbot_install() {
+  print_banner
+  printf "${WHITE} 💻 Instalando certbot...${GRAY_LIGHT}"
+  printf "\n\n"
+
+  sleep 2
+
+  sudo su - root <<EOF
+  apt-get remove certbot
+  snap install --classic certbot
+  ln -s /snap/bin/certbot /usr/bin/certbot
+EOF
+
+  sleep 2
+}
+
+#######################################
+# installs nginx
+# Arguments:
+#   None
+#######################################
+system_nginx_install() {
+  print_banner
+  printf "${WHITE} 💻 Instalando nginx...${GRAY_LIGHT}"
+  printf "\n\n"
+
+  sleep 2
+
+  sudo su - root <<EOF
+  apt install -y nginx
+  rm /etc/nginx/sites-enabled/default
+EOF
+
+  sleep 2
+}
+
+#######################################
+# restarts nginx
+# Arguments:
+#   None
+#######################################
+system_nginx_restart() {
+  print_banner
+  printf "${WHITE} 💻 reiniciando nginx...${GRAY_LIGHT}"
+  printf "\n\n"
+
+  sleep 2
+
+  sudo su - root <<EOF
+  service nginx restart
+EOF
+
+  sleep 2
+}
+
+#######################################
+# setup for nginx.conf
+# Arguments:
+#   None
+#######################################
+system_nginx_conf() {
+  print_banner
+  printf "${WHITE} 💻 configurando nginx...${GRAY_LIGHT}"
+  printf "\n\n"
+
+  sleep 2
+
+sudo su - root << EOF
+
+cat > /etc/nginx/conf.d/deploy.conf << 'END'
+client_max_body_size 100M;
+END
+
+EOF
+
+  sleep 2
+}
+
+#######################################
+# installs nginx
+# Arguments:
+#   None
+#######################################
+system_certbot_setup() {
+  print_banner
+  printf "${WHITE} 💻 Configurando certbot...${GRAY_LIGHT}"
+  printf "\n\n"
+
+  sleep 2
+
+  backend_domain=$(echo "${backend_url/https:\/\/}")
+  frontend_domain=$(echo "${frontend_url/https:\/\/}")
+
+  sudo su - root <<EOF
+  certbot -m $deploy_email \
+          --nginx \
+          --agree-tos \
+          --non-interactive \
+          --domains $backend_domain,$frontend_domain
+
+EOF
+
   sleep 2
 }
