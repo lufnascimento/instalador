@@ -78,7 +78,7 @@ system_unzip_whaticket() {
   unzip /home/deploy/${instancia_add}/whaticket.zip -d /home/deploy/${instancia_add}
 EOF
 
-  sleep
+  sleep 2
 }
 
 #######################################
